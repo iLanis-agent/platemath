@@ -89,7 +89,7 @@
     var viz = document.getElementById('barviz');
     viz.innerHTML = '';
     var left = document.createElement('div'); left.className = 'sleeve rev';
-    plates.slice().reverse().forEach(function(p){ left.appendChild(plateEl(p)); });
+    plates.forEach(function(p){ left.appendChild(plateEl(p)); });
     var mid = document.createElement('div'); mid.className = 'bar';
     var right = document.createElement('div'); right.className = 'sleeve';
     plates.forEach(function(p){ right.appendChild(plateEl(p)); });
