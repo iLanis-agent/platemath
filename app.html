@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlateMath - load the bar right the first time</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#150f10; color:#f4ecea; min-height:100vh; }
+  .wrap { max-width:860px; margin:0 auto; padding:28px 20px 80px; }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; }
+  header h1 { font-size:22px; } header h1 span { color:#e05b4c; }
+  header a { color:#a08d8a; text-decoration:none; font-size:14px; }
+  .card { background:#1e1416; border:1px solid #472b2a; border-radius:12px; padding:18px; margin-bottom:18px; }
+  label { font-size:12px; color:#a08d8a; display:block; margin-bottom:4px; }
+  input, select { background:#150f10; border:1px solid #593736; border-radius:8px; color:#f4ecea; padding:9px 10px; font-size:14px; width:100%; }
+  button { background:#e05b4c; border:none; color:#2b0f0b; font-weight:700; padding:11px 22px; border-radius:9px; font-size:14px; cursor:pointer; }
+  .row4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-bottom:12px; }
+  h3 { font-size:14px; color:#d0bbb8; margin-bottom:10px; }
+  .verdict { background:#281216; border:1px solid #5c2f2b; border-radius:10px; padding:14px 16px; margin-bottom:14px; font-size:15px; line-height:1.6; }
+  .verdict b { color:#e05b4c; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:right; padding:7px 8px; border-bottom:1px solid #3a2224; }
+  th { color:#a08d8a; font-weight:600; }
+  td:first-child, th:first-child { text-align:left; }
+  td:nth-child(3), th:nth-child(3) { text-align:left; }
+  .err { color:#ff8a8a; font-size:13px; margin-top:8px; }
+  .note { color:#6e5c5a; font-size:12px; margin-top:10px; }
+  .barviz { display:flex; align-items:center; justify-content:center; gap:3px; margin:18px 0 8px; }
+  .sleeve { display:flex; align-items:center; gap:3px; flex-direction:row; }
+  .sleeve.rev { flex-direction:row-reverse; }
+  .plate { border-radius:3px; background:#e05b4c; color:#2b0f0b; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; writing-mode:vertical-rl; }
+  .bar { height:10px; width:70px; background:#7a6a68; border-radius:5px; }
+  .plates-lbl { text-align:center; color:#a08d8a; font-size:12px; margin-bottom:12px; }
+  @media (max-width:640px){ .row4 { grid-template-columns:1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Plate<span>Math</span></h1><a href="index.html">home</a></header>
+
+  <div class="card">
+    <h3>What are you lifting?</h3>
+    <div class="row4">
+      <div><label>Target weight</label><input id="target" type="number" step="2.5" value="225"></div>
+      <div><label>Units</label><select id="unit"><option value="lb">lb (45 bar)</option><option value="kg">kg (20 bar)</option></select></div>
+      <div><label>Your 1RM (optional)</label><input id="orm" type="number" placeholder="for the % table"></div>
+      <div></div>
+    </div>
+    <button id="go">Plate it</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="out" style="display:none">
+    <div class="verdict" id="verdict"></div>
+    <div class="card">
+      <h3>The bar</h3>
+      <div class="barviz" id="barviz"></div>
+      <div class="plates-lbl" id="plateslbl"></div>
+    </div>
+    <div class="card" id="pctcard" style="display:none">
+      <h3>Percentage table off your 1RM</h3>
+      <table id="pct">
+        <thead><tr><th>%</th><th>Raw</th><th>Load this</th><th>Plates per side</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="note">Weights round to what the bar can actually hold, nearest loadable first.</div>
+    </div>
+  </div>
+</div>
+<script src="engine.js"></script>
+<script>
+(function(){
+  var F = ['target','unit','orm'];
+  var KEY = 'platemath-settings';
+  function save(){ var o={}; F.forEach(function(f){o[f]=document.getElementById(f).value;}); try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){} }
+  function load(){ try{ var o=JSON.parse(localStorage.getItem(KEY)||'null'); if(o) F.forEach(function(f){ if(o[f]!==undefined) document.getElementById(f).value=o[f]; }); }catch(e){} }
+  var HEIGHTS = { 45:96, 35:82, 25:68, 10:50, 5:38, 2.5:28, 20:88, 15:64, 1.25:22 };
+  function plateEl(p){
+    var d = document.createElement('div');
+    d.className = 'plate';
+    var h = HEIGHTS[p] || 28;
+    d.style.height = h + 'px';
+    d.style.width = (10 + Math.min(14, p/4)) + 'px';
+    d.textContent = p;
+    return d;
+  }
+  function drawBar(plates){
+    var viz = document.getElementById('barviz');
+    viz.innerHTML = '';
+    var left = document.createElement('div'); left.className = 'sleeve rev';
+    plates.slice().reverse().forEach(function(p){ left.appendChild(plateEl(p)); });
+    var mid = document.createElement('div'); mid.className = 'bar';
+    var right = document.createElement('div'); right.className = 'sleeve';
+    plates.forEach(function(p){ right.appendChild(plateEl(p)); });
+    viz.appendChild(left); viz.appendChild(mid); viz.appendChild(right);
+  }
+  function platesText(plates){
+    if (!plates.length) return 'bar only - nothing to add';
+    var counts = {};
+    plates.forEach(function(p){ counts[p] = (counts[p]||0) + 1; });
+    return 'per side: ' + Object.keys(counts).sort(function(a,b){return b-a;}).map(function(p){ return counts[p] + ' x ' + p; }).join(' + ');
+  }
+  function run(){
+    var errEl = document.getElementById('err'); errEl.textContent = '';
+    var target = document.getElementById('target').value;
+    var unit = document.getElementById('unit').value;
+    var orm = document.getElementById('orm').value;
+    var res;
+    try { res = PlateMathEngine.closestLoads(parseFloat(target), unit, 80); } catch(e){ errEl.textContent = e.message; return; }
+    save();
+    var v = document.getElementById('verdict');
+    var pick;
+    if (res.exact) {
+      pick = res.exact;
+      v.innerHTML = '<b>' + pick.target + ' ' + unit + '</b> loads exactly: ' + platesText(pick.plates) + ' on a ' + pick.bar + ' ' + unit + ' bar.';
+    } else {
+      pick = res.below || res.above;
+      var msg = '<b>' + target + ' ' + unit + " doesn't exist on the bar</b> with standard plates. ";
+      if (res.below && res.above) msg += 'Load <b>' + res.below.target + '</b> (' + platesText(res.below.plates) + ') or <b>' + res.above.target + '</b> (' + platesText(res.above.plates) + ').';
+      else if (pick) msg += 'Nearest loadable: <b>' + pick.target + '</b> (' + platesText(pick.plates) + ').';
+      v.innerHTML = msg;
+    }
+    drawBar(pick.plates);
+    document.getElementById('plateslbl').textContent = pick.target + ' ' + unit + ' total - ' + platesText(pick.plates);
+    var pctCard = document.getElementById('pctcard');
+    if (orm && parseFloat(orm) > 0) {
+      try {
+        var rows = PlateMathEngine.percentTable(parseFloat(orm), unit);
+        var tb = document.querySelector('#pct tbody'); tb.innerHTML = '';
+        rows.forEach(function(row){
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.pct + '%</td><td>' + row.raw + '</td><td><b>' + (row.weight === null ? '-' : row.weight + ' ' + unit) + '</b></td><td>' + platesText(row.plates).replace('per side: ','') + '</td>';
+          tb.appendChild(tr);
+        });
+        pctCard.style.display = 'block';
+      } catch(e) { pctCard.style.display = 'none'; }
+    } else { pctCard.style.display = 'none'; }
+    document.getElementById('out').style.display = 'block';
+  }
+  document.getElementById('go').addEventListener('click', run);
+  load();
+})();
+</script>
+</body>
+</html>
